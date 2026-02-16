@@ -1392,14 +1392,26 @@ def get_molecular_structure_reward(
         """
         contents = [completion[0]["content"] for completion in completions]
         rewards = []
-        
-        # Standardize group names
-        if added_group == "benzene ring":
-            added_group = "benzene_ring"
-        if removed_group == "benzene ring":
-            removed_group = "benzene_ring"
 
-        for completion in contents:
+        def _pick_item(value, idx):
+            if isinstance(value, list):
+                if idx < len(value):
+                    return value[idx]
+                return value[0] if len(value) > 0 else None
+            return value
+
+        for idx, completion in enumerate(contents):
+            current_target_mol = _pick_item(target_mol, idx)
+            current_original_mol = _pick_item(original_mol, idx)
+            current_removed_group = _pick_item(removed_group, idx)
+            current_added_group = _pick_item(added_group, idx)
+
+            # Standardize group names per sample
+            if current_added_group == "benzene ring":
+                current_added_group = "benzene_ring"
+            if current_removed_group == "benzene ring":
+                current_removed_group = "benzene_ring"
+
             # Extract SMILE string from completion
             response_smile = extract_smile(completion)
             
@@ -1411,22 +1423,22 @@ def get_molecular_structure_reward(
                 continue
             
             # Calculate similarity component
-            similarity_score = calculate_similarity(original_mol, response_smile) if original_mol else 0.0
+            similarity_score = calculate_similarity(current_original_mol, response_smile) if current_original_mol else 0.0
             
             # Calculate structural modification component
             structure_score = check_structure_modification(
-                original_mol, 
+                current_original_mol, 
                 response_smile,
-                removed=removed_group,
-                added=added_group
-            ) if original_mol else 0.0
+                removed=current_removed_group,
+                added=current_added_group
+            ) if current_original_mol else 0.0
             
             # Calculate combined reward
             reward = (similarity_weight * similarity_score) + (structure_weight * structure_score)
             
             # Compare with target if available
-            if target_mol:
-                target_similarity = calculate_similarity(target_mol, response_smile)
+            if current_target_mol:
+                target_similarity = calculate_similarity(current_target_mol, response_smile)
                 print(f'Target similarity: {target_similarity}')
             
             rewards.append(reward)
@@ -1434,9 +1446,9 @@ def get_molecular_structure_reward(
             # Print debugging information
             print('-'*100)
             print(f'Response SMILE: {response_smile}')
-            print(f'Original SMILE: {original_mol}')
-            print(f'Removed group: {removed_group}')
-            print(f'Added group: {added_group}')
+            print(f'Original SMILE: {current_original_mol}')
+            print(f'Removed group: {current_removed_group}')
+            print(f'Added group: {current_added_group}')
             print(f'Similarity score: {similarity_score}')
             print(f'Structure modification score: {structure_score}')
             print(f'Total reward: {reward}')

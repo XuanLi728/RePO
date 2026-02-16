@@ -168,12 +168,29 @@ def main(script_args, training_args, model_args, variant: str = "default"):
             "<think> reasoning process here </think><answer> \\\\boxed{{answer here}} </answer>"
         )
 
+    use_structure_data = "structure_optimization" in getattr(script_args, "reward_funcs", [])
+
     # Dataset selection
     if variant == "math":
         # Match grpo_math.py: load train/test splits directly from HF dataset name
         train_dataset = load_dataset(script_args.dataset_name, split="train")
         eval_dataset = load_dataset(script_args.dataset_name, split="test")
         dataset = None
+    elif use_structure_data:
+        # Structure reward requires per-sample structure metadata from the structural JSON dataset.
+        data = json.load(open("data/structural_opt_light.json", "r"))
+        df = pd.DataFrame(data)
+        ds = Dataset.from_pandas(df)
+        dataset = DatasetDict({"train": ds})
+        dataset = dataset.rename_column("instruction", "problem")
+        dataset = dataset.rename_column("output", "solution")
+        train_dataset = None
+        eval_dataset = None
+        if script_args.subtask_selection != ["AddComponent", "SubComponent", "DelComponent"]:
+            logger.warning(
+                "reward_funcs includes structure_optimization; forcing structural_opt_light.json even though "
+                f"subtask_selection={script_args.subtask_selection}."
+            )
     elif variant == "mumo":
         # Match grpo_mumo.py: support structural opt / property opt / multi-prop datasets
         if script_args.subtask_selection == ["AddComponent", "SubComponent", "DelComponent"]:
@@ -356,7 +373,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
             )(completions=completions, prompts=prompts),
             "structure_optimization": lambda prompts, completions, **kwargs: get_molecular_structure_reward(
                 extract_pattern=r"<answer>(.*?)</answer>"
-            )(completions=completions, prompts=prompts),
+            )(completions=completions, prompts=prompts, **kwargs),
         }
     reward_funcs = [REWARD_FUNCS_REGISTRY[func] for func in script_args.reward_funcs]
     reward_func_names = script_args.reward_funcs
