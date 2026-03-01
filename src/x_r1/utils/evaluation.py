@@ -41,10 +41,6 @@ def register_lighteval_task(
 
 LIGHTEVAL_TASKS = {}
 
-register_lighteval_task(LIGHTEVAL_TASKS, "custom", "math_500", "math_500", 0)
-register_lighteval_task(LIGHTEVAL_TASKS, "custom", "aime24", "aime24", 0)
-register_lighteval_task(LIGHTEVAL_TASKS, "custom", "gpqa", "gpqa:diamond", 0)
-
 
 def get_lighteval_tasks():
     return list(LIGHTEVAL_TASKS.keys())
@@ -61,7 +57,7 @@ def run_lighteval_job(
     model_revision = training_args.hub_model_revision
 
     model_name = './output/qwen-3b-instruct'
-    # For large models >= 30b params or those running the MATH benchmark, we need to shard them across the GPUs to avoid OOM
+    # For large models >= 30b params, we need to shard them across GPUs to avoid OOM.
     num_gpus = get_gpu_count_for_vllm(model_name, model_revision)
     if get_param_count_from_repo_id(model_name) >= 30_000_000_000:
         tensor_parallel = True
@@ -87,6 +83,9 @@ def run_lighteval_job(
 
 
 def run_benchmark_jobs(training_args: Union["SFTConfig", "GRPOConfig"], model_args: "ModelConfig") -> None:
+    if len(LIGHTEVAL_TASKS) == 0:
+        raise ValueError("No built-in LightEval benchmarks are enabled in this repository.")
+
     benchmarks = training_args.benchmarks
     if len(benchmarks) == 1 and benchmarks[0] == "all":
         benchmarks = get_lighteval_tasks()

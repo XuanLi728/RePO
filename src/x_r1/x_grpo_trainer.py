@@ -99,29 +99,6 @@ def replace_smile(text, solution):
 
     return text # + f"<answer>{solution}</answer>"
 
-def replace_solution(text: str, solution: str) -> str:
-    """Math variant: replace the last boxed segment with the gold `solution`."""
-    try:
-        from math_reward import last_boxed_only_string
-    except Exception:
-        return text
-
-    boxed_segment = last_boxed_only_string(text)
-    if boxed_segment is None:
-        return text
-
-    if boxed_segment.startswith("\\boxed "):
-        replacement = "\\boxed " + solution
-    elif boxed_segment.startswith("\\boxed{"):
-        replacement = "\\boxed{" + solution + "}"
-    elif boxed_segment.startswith("\\fbox{"):
-        replacement = "\\fbox{" + solution + "}"
-    else:
-        replacement = solution
-
-    return text.replace(boxed_segment, replacement, 1)
-
-
 # What we call a reward function is a callable that takes a list of prompts and completions and returns a list of
 # rewards. When it's a string, it's a model ID, so it's loaded as a pretrained model.
 RewardFunc = Union[str, PreTrainedModel, Callable[[list, list], list[float]]]
@@ -683,12 +660,10 @@ class XGRPOTrainer(GRPOTrainer):
 
         print('advantage:', advantages)
 
-        '''DePO'''
+        '''RePO'''
 
         completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
-        if self.variant == "math":
-            solutions_text = [replace_solution(text, x["solution"]) for (text, x) in zip(completions_text, inputs)]
-        elif self.variant == "pure":
+        if self.variant == "pure":
             solutions_text = [x["solution"] for x in inputs]
         else:
             solutions_text = [replace_smile(text, x["solution"]) for (text, x) in zip(completions_text, inputs)]

@@ -12,7 +12,7 @@ fi
 # Defaults (override via env vars or CLI flags)
 # export WANDB_MODE="${WANDB_MODE:-offline}"
 GPUS="${GPUS:-5,6,7}"
-ENTRY="${ENTRY:-src/x_r1/depo.py}"
+ENTRY="${ENTRY:-src/x_r1/repo.py}"
 VARIANT="${VARIANT:-}"
 CONFIG="${CONFIG:-recipes/OpenMolIns_3B_config.yaml}"
 ACCELERATE_CONFIG="${ACCELERATE_CONFIG:-recipes/zero3.yaml}"
@@ -25,11 +25,11 @@ ACCELERATE_LOG_LEVEL="${ACCELERATE_LOG_LEVEL:-info}"
 
 usage() {
   cat <<'EOF'
-Run RL training (GRPO / DePO variants) via accelerate.
+Run RL training (GRPO / RePO variants) via accelerate.
 
 Usage:
   bash scripts/run_RL_training.sh [--gpus 0,1] [--entry src/x_r1/grpo.py] [--config recipes/XXX.yaml]
-                                 [--variant default|math|mumo|pure|noisy_demo|random_mask]
+                                 [--variant default|mumo|pure|noisy_demo|random_mask]
                                  [--accelerate_config recipes/zero3.yaml] [--num_processes 2]
                                  [--output_dir /path/to/save_dir]
                                  [--port 29500] [--log_dir ./logs] [--log_file ./logs/your.log]
@@ -37,9 +37,6 @@ Usage:
 Examples:
   # Default OpenMolIns 3B GRPO training
   bash scripts/run_RL_training.sh
-
-  # DePO math training
-  bash scripts/run_RL_training.sh --entry src/x_r1/depo.py --variant math --config recipes/MATH_3B_depo.yaml
 
   # Multi-property training
   bash scripts/run_RL_training.sh --entry src/x_r1/grpo.py --variant mumo --config recipes/MulProp_bbbp-drd2-qed_3B_config.yaml

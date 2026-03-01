@@ -12,7 +12,6 @@ Large language models (LLMs) benefit substantially from supervised fine-tuning (
 conda create -n repo python=3.10 -y
 conda activate repo
 pip install -r requirements.txt
-# optional (GPU-specific)
 pip install flash-attn
 ```
 
@@ -24,10 +23,10 @@ Use the unified training launcher:
 bash scripts/run_RL_training.sh \
   --gpus 0,1,2 \
   --num_processes 2 \
-  --entry src/x_r1/grpo.py \
+  --entry src/x_r1/repo.py \
   --variant mumo \
   --config recipes/MulProp_3B_config.yaml \
-  --output_dir ./output/grpo_run
+  --output_dir ./output/repo_run
 ```
 
 Common variants:
@@ -41,23 +40,21 @@ Common variants:
 
 ```bash
 python generate_predictions.py \
-  --model_path ./output/grpo_run/checkpoint-xxx \
+  --model_path ./output/xxx/checkpoint-xxx \
   --benchmark open_generation \
   --task MolOpt \
   --subtask LogP \
-  --output_dir ./predictions/ \
-  --lang en
+  --output_dir ./predictions/
 ```
 
 Notes:
-- `--lang en|cn` controls prompt language.
 - Outputs include CSV and JSONL artifacts under `./predictions/`.
 
 ### 4) Evaluate Predictions
 
 ```bash
 bash scripts/run_full_evaluation.sh \
-  --model_path ./output/grpo_run/checkpoint-xxx \
+  --model_path ./output/repo_run/checkpoint-xxx \
   --task MolOpt \
   --subtasks LogP,MR,QED \
   --output_dir ./predictions/ \
@@ -68,4 +65,3 @@ bash scripts/run_full_evaluation.sh \
 
 - `mumo_evaluate.py`: computes MuMo-style success/similarity metrics from generated JSON.
 - `cal.py`: small CSV utilities (`--mode count` / `--mode wsr`).
-- `src/x_r1/infer_vllm_math.py`: math inference + accuracy utility.

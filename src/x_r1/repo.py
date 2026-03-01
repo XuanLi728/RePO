@@ -20,7 +20,7 @@ from transformers import set_seed
 from transformers.trainer_utils import get_last_checkpoint
 from trl import ModelConfig, ScriptArguments, TrlParser, get_peft_config
 from utils.callbacks import get_callbacks
-from x_depo_trainer import XGRPOTrainer
+from x_repo_trainer import XGRPOTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def init_wandb_training(training_args):
 class GRPOScriptArguments(ScriptArguments):
     variant: str = field(
         default="default",
-        metadata={"help": "Entry variant for consolidated `depo.py` (default|math|mumo|noisy_demo|random_mask)"},
+        metadata={"help": "Entry variant for consolidated `repo.py` (default|mumo|noisy_demo|random_mask)"},
     )
     reward_funcs: list[str] = field(
         default_factory=lambda: ["accuracy", "format"],
@@ -129,7 +129,7 @@ class GRPOScriptArguments(ScriptArguments):
     )
 
 def _apply_batch_shuffle_noise(df: pd.DataFrame, seed: int, p: float, bucket_key: str | None) -> pd.DataFrame:
-    """Copied from `depo_noisy_main.py` to support the noisy_demo variant."""
+    """Copied from `repo_noisy_main.py` to support the noisy_demo variant."""
     if p <= 0.0:
         return df
     n = len(df)
@@ -210,15 +210,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
     if "wandb" in training_args.report_to:
         init_wandb_training(training_args)
 
-    # Variant-specific system prompt (math needs boxed answers)
     system_prompt = SYSTEM_PROMPT
-    if variant == "math":
-        system_prompt = (
-            "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-            "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-            "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-            "<think> reasoning process here </think><answer> \\\\boxed{{answer here}} </answer>"
-        )
 
     use_structure_data = "structure_optimization" in getattr(script_args, "reward_funcs", [])
 
@@ -227,11 +219,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
     train_dataset = None
     eval_dataset = None
 
-    if variant == "math":
-        train_dataset = load_dataset(script_args.dataset_name, split="train")
-        eval_dataset = load_dataset(script_args.dataset_name, split="test")
-        dataset = None
-    elif use_structure_data:
+    if use_structure_data:
         # Structure reward requires per-sample structure metadata from the structural JSON dataset.
         data = json.load(open("data/structural_opt_light.json", "r"))
         df = pd.DataFrame(data)
@@ -349,33 +337,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
                 dataset = dataset.rename_column("molecule", "solution")
 
     # Get reward functions
-    if variant == "math":
-        from math_reward import compute_score
-
-        def _to_text_list(completions):
-            texts = []
-            for c in completions:
-                if isinstance(c, str):
-                    texts.append(c)
-                elif isinstance(c, list) and len(c) > 0:
-                    last = c[-1]
-                    if isinstance(last, dict) and "content" in last:
-                        texts.append(str(last["content"]))
-                    else:
-                        texts.append(str(c))
-                else:
-                    texts.append("")
-            return texts
-
-        REWARD_FUNCS_REGISTRY = {
-            "math_accuracy": lambda prompts, completions, solutions=None, **kwargs: (
-                [compute_score(c, s) for c, s in zip(_to_text_list(completions), solutions)]
-                if solutions is not None
-                else [0.0] * len(completions)
-            ),
-            "format": lambda prompts, completions, **kwargs: format_reward(completions=completions),
-        }
-    elif variant == "mumo":
+    if variant == "mumo":
         from rewards_mumo import (
             accuracy_reward as mumo_accuracy_reward,
             format_reward as mumo_format_reward,
@@ -498,11 +460,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
             "solution": example["solution"] if "solution" in example else None,
         }
 
-    if variant == "math":
-        train_dataset = train_dataset.map(make_conversation)
-        eval_dataset = eval_dataset.map(make_conversation)
-    else:
-        dataset = dataset.map(make_conversation)
+    dataset = dataset.map(make_conversation)
 
     logger.info("*** Initializing model kwargs ***")
     torch_dtype = (
@@ -533,8 +491,8 @@ def main(script_args, training_args, model_args, variant: str = "default"):
         reward_func_names=reward_func_names,  
         args=training_args,
         variant=variant,
-        train_dataset=train_dataset if variant == "math" else dataset[script_args.dataset_train_split],
-        eval_dataset=(eval_dataset if variant == "math" else dataset[script_args.dataset_test_split])
+        train_dataset=dataset[script_args.dataset_train_split],
+        eval_dataset=dataset[script_args.dataset_test_split]
         if training_args.eval_strategy != "no"
         else None,
         peft_config=get_peft_config(model_args), # LoRA parameter
@@ -554,7 +512,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
         checkpoint = last_checkpoint
     train_result = trainer.train(resume_from_checkpoint=checkpoint)
     metrics = train_result.metrics
-    metrics["train_samples"] = len(train_dataset) if variant == "math" else len(dataset[script_args.dataset_train_split])
+    metrics["train_samples"] = len(dataset[script_args.dataset_train_split])
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
     trainer.save_state()
@@ -579,12 +537,9 @@ def main(script_args, training_args, model_args, variant: str = "default"):
 
 def run(variant: str = "default"):
     """
-    Minimal consolidation point for DePO variants.
-    - default: existing behavior of `depo.py`
-    - math: behavior of `depo_math.py` (boxed prompt, math_accuracy default, x_depo_trainer_math)
-    - mumo: MuMo variant behavior (dataset + rewards aligned with GRPO MuMo)
-    - noisy_demo: behavior of `depo_noisy_main.py` (dataset-level noisy injection + caching)
-    - random_mask: behavior of `grpo_random_mask.py` (RandomMaskGRPOConfig + x_depo_trainer_random_masking)
+    Minimal consolidation point for RePO variants.
+    - default: existing behavior of `repo.py`
+    - mumo: MuMo dataset/reward path enabled in this entrypoint
     """
     variant = (variant or "default").strip().lower()
     config_cls = GRPOConfig
@@ -596,10 +551,6 @@ def run(variant: str = "default"):
 
     if variant == "default":
         variant = getattr(script_args, "variant", "default")
-
-    # Match depo_math.py defaults unless user explicitly changed reward_funcs
-    if variant == "math" and script_args.reward_funcs == ["accuracy", "format"]:
-        script_args.reward_funcs = ["math_accuracy", "format"]
 
     main(script_args, training_args, model_args, variant=variant)
 

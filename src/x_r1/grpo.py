@@ -21,8 +21,6 @@ from trl import ModelConfig, ScriptArguments, TrlParser, get_peft_config
 from utils.callbacks import get_callbacks
 from x_grpo_trainer import XGRPOTrainer
 
-from math_reward import compute_score
-
 logger = logging.getLogger(__name__)
 
 # System prompt for all tasks
@@ -48,7 +46,7 @@ def init_wandb_training(training_args):
 class GRPOScriptArguments(ScriptArguments):
     variant: str = field(
         default="default",
-        metadata={"help": "Entry variant for consolidated `grpo.py` (default|math|mumo|pure|noisy_demo|random_mask)"},
+        metadata={"help": "Entry variant for consolidated `grpo.py` (default|mumo|pure|noisy_demo|random_mask)"},
     )
     reward_funcs: list[str] = field(
         default_factory=lambda: ["accuracy", "format"],
@@ -158,25 +156,12 @@ def main(script_args, training_args, model_args, variant: str = "default"):
     if "wandb" in training_args.report_to:
         init_wandb_training(training_args)
 
-    # Variant-specific system prompt (math needs boxed answers)
     system_prompt = SYSTEM_PROMPT
-    if variant == "math":
-        system_prompt = (
-            "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-            "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-            "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-            "<think> reasoning process here </think><answer> \\\\boxed{{answer here}} </answer>"
-        )
 
     use_structure_data = "structure_optimization" in getattr(script_args, "reward_funcs", [])
 
     # Dataset selection
-    if variant == "math":
-        # Match grpo_math.py: load train/test splits directly from HF dataset name
-        train_dataset = load_dataset(script_args.dataset_name, split="train")
-        eval_dataset = load_dataset(script_args.dataset_name, split="test")
-        dataset = None
-    elif use_structure_data:
+    if use_structure_data:
         # Structure reward requires per-sample structure metadata from the structural JSON dataset.
         data = json.load(open("data/structural_opt_light.json", "r"))
         df = pd.DataFrame(data)
@@ -344,11 +329,6 @@ def main(script_args, training_args, model_args, variant: str = "default"):
             )
             if solutions is not None
             else [0.0] * len(completions),
-            "math_accuracy": lambda prompts, completions, solutions=None, **kwargs: compute_score(
-                completions=completions, solution=solutions
-            )
-            if solutions is not None
-            else [0.0] * len(completions),
             "format": lambda prompts, completions, **kwargs: format_reward(completions=completions),
             "length": lambda prompts, completions, solutions=None, **kwargs: len_reward(
                 prompts=prompts,
@@ -394,11 +374,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
             "solution": example["solution"] if "solution" in example else None,
         }
 
-    if variant == "math":
-        train_dataset = train_dataset.map(make_conversation)
-        eval_dataset = eval_dataset.map(make_conversation)
-    else:
-        dataset = dataset.map(make_conversation)
+    dataset = dataset.map(make_conversation)
 
     logger.info("*** Initializing model kwargs ***")
     torch_dtype = (
@@ -429,8 +405,8 @@ def main(script_args, training_args, model_args, variant: str = "default"):
         reward_func_names=reward_func_names,  
         args=training_args,
         variant=variant,
-        train_dataset=train_dataset if variant == "math" else dataset[script_args.dataset_train_split],
-        eval_dataset=(eval_dataset if variant == "math" else dataset[script_args.dataset_test_split])
+        train_dataset=dataset[script_args.dataset_train_split],
+        eval_dataset=dataset[script_args.dataset_test_split]
         if training_args.eval_strategy != "no"
         else None,
         peft_config=get_peft_config(model_args), # LoRA parameter
@@ -450,7 +426,7 @@ def main(script_args, training_args, model_args, variant: str = "default"):
         checkpoint = last_checkpoint
     train_result = trainer.train(resume_from_checkpoint=checkpoint)
     metrics = train_result.metrics
-    metrics["train_samples"] = len(train_dataset) if variant == "math" else len(dataset[script_args.dataset_train_split])
+    metrics["train_samples"] = len(dataset[script_args.dataset_train_split])
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
     trainer.save_state()
@@ -477,9 +453,7 @@ def run(variant: str = "default"):
     """
     Minimal consolidation point for GRPO variants.
     - default: existing behavior of `grpo.py`
-    - math: behavior of `grpo_math.py` (boxed prompt, math_accuracy default, x_grpo_trainer_math)
-    - mumo: behavior of `grpo_mumo.py` (MuMo dataset + rewards, x_grpo_trainer_mumo)
-    - pure: behavior of `grpo_pure.py` (x_grpo_trainer_pure)
+    - mumo: MuMo dataset/reward path enabled in this entrypoint
     """
     variant = (variant or "default").strip().lower()
 
@@ -490,11 +464,6 @@ def run(variant: str = "default"):
     if variant == "default":
         variant = getattr(script_args, "variant", "default")
 
-    # Variant-specific defaults / wiring (keep changes minimal and opt-in)
-    if variant == "math":
-        # Match grpo_math.py defaults unless user explicitly changed reward_funcs
-        if script_args.reward_funcs == ["accuracy", "format"]:
-            script_args.reward_funcs = ["math_accuracy", "format"]
     main(script_args, training_args, model_args, variant=variant)
 
 
