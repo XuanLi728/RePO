@@ -114,7 +114,7 @@ python mumo_evaluate.py \
   --seen_setting seen \
   --IND_setting IND \
   --experiment_prefix bdp \
-  --method_name _repo \
+  --method_name repo \
   --output_folder MuMo_performance
 ```
 

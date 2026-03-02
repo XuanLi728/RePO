@@ -231,7 +231,7 @@ def main(
 ):
     require_drd2 = True if "drd2" in property_setting else False
 
-    experiment_dir = os.path.join(base_dir, f"{experiment_prefix}{method_name}")
+    experiment_dir = os.path.join(base_dir, f"{experiment_prefix}_{method_name}")
     json_path = os.path.join(
         experiment_dir,
         f"processed_{IND_setting}_{seen_setting}_{property_setting}_test_data.json",
