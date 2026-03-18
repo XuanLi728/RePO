@@ -7,7 +7,7 @@
 
 </div>
 
-<table align="center">
+<table >
   <tr>
     <td align="center" valign="top" width="55%">
       <img src="figures/Fig1_Task.png" height="150"><br>
