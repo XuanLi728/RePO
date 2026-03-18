@@ -7,13 +7,13 @@
 
 </div>
 
-<table >
+<table align="center">
   <tr>
-    <td align="center" valign="top" width="55%">
+    <td align="center" valign="bottom" width="55%">
       <img src="figures/Fig1_Task.png" height="150"><br>
       <em>Instruction-based molecular optimization task</em>
     </td>
-    <td align="center" valign="top" width="45%">
+    <td align="center" valign="bottom" width="45%">
       <img src="figures/Fig2_Method.png" height="150"><br>
       <em>RePO training objective</em>
     </td>
