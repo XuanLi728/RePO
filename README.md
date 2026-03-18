@@ -3,7 +3,7 @@
 # RePO: Reference-guided Policy Optimization for Molecular Optimization via LLM Reasoning
 
 [![arXiv](https://img.shields.io/badge/arXiv-2603.05900-b31b1b.svg)](https://arxiv.org/abs/2603.05900) 
-[![ICLR 2026](https://img.shields.io/badge/ICLR-2026-4b44ce.svg)](https://iclr.cc/Conferences/2026)
+[![ICLR 2026](https://img.shields.io/badge/ICLR-2026-4b44ce.svg)](https://openreview.net/pdf?id=m4nvqQkm4X)
 
 </div>
 
